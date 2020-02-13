@@ -1,4 +1,10 @@
-#  One-D wave propagation using PyTorch 
+#!python
+# -*- coding: UTF8-*- #
+'''One-D wave propagation using PyTorch
+Version: @ 02/12/2020
+    Fix the bug in `/fwi_dl/Wave1D_AGfunc.py`, this bug
+    causes the script could not run on GPU device.
+'''
 
 import sys
 import math
@@ -13,7 +19,13 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 
 from models import *
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+if torch.cuda.is_available():
+    device = torch.device('cuda:0')
+    FloatTensor = torch.cuda.FloatTensor
+else:
+    device = torch.device('cpu')
+    FloatTensor = torch.FloatTensor
 
 pgmDesc = 'Physics-Guided Neural Network (PGNN) of 1D Wave Propagation from PySIT Exercises'
 
@@ -37,7 +49,7 @@ def ricker(t, config):
     t0 = 6. / sigmaInv
     tdel = t - t0
     expt = (math.pi * nu0 * tdel) ** 2
-    w = torch.zeros(t.size()).to(device)
+    w = torch.zeros(t.size(), device=device)
     w[:] = (1. - 2. * expt) * torch.exp( -expt )
     w[torch.where(abs(w) < 1e-7)] = 0
 
@@ -68,7 +80,7 @@ class Point_Source(object):
   def set(self, value ):
     ''' Sets amplitude at source point for current time 
     '''
-    f = torch.zeros([self.nx]).to(device)
+    f = torch.zeros([self.nx], device=device)
     f[self.ixs] = (1. - self.frac) * value
     f[self.ixs-1] = self.frac * value
 
@@ -90,8 +102,8 @@ class Receivers(object):
     xpos = (x_r - xbgn)
     ixr = ( np.clip( np.ceil(xpos/dx), 1, nx-1) ).astype(np.int64)
     frac = (ixr - xpos/dx)
-    self.ixr = torch.from_numpy(ixr).long().to(device)
-    self.frac = torch.from_numpy(frac).float().to(device)
+    self.ixr = torch.from_numpy(ixr).to(device, dtype=torch.long)
+    self.frac = torch.from_numpy(frac).to(device, dtype=torch.float)
 
   def sample(self, u ):
     ''' Interpolates amplitude at each receiver point for current time 
@@ -117,18 +129,18 @@ def wave_matrices(C, config):
     # Stiffness 
     # spatial second-order accurate centered and forward differences
     spcOrder = 2
-    spcCtr = torch.FloatTensor([   1., -2.,    1. ]).to(device)
-    spcFwd = torch.FloatTensor([-3./2., 2., -1./2.]).to(device)
+    spcCtr = FloatTensor([   1., -2.,    1. ])
+    spcFwd = FloatTensor([-3./2., 2., -1./2.])
     lbdry = 0; rbdry = -1  # boundary indices
 
     #  interior points:
-    Cwgt = ((C/dx)**2).to(device)
-    Kxx = torch.repeat_interleave(spcCtr,nx).reshape(3,nx).to(device) * Cwgt
+    Cwgt = (C/dx)**2
+    Kxx = torch.repeat_interleave(spcCtr,nx).reshape(3,nx) * Cwgt
     Kxx[:,lbdry] = 0.
     Kxx[:,rbdry] = 0. 
 
     #  boundaries:
-    Kx = torch.zeros([3,nx]).to(device)
+    Kx = torch.zeros([3,nx], device=device)
     if not fixedBC:
         Kx[:,lbdry] =            spcFwd  * C[lbdry] / dx
         Kx[:,rbdry] = torch.flip(spcFwd,[0]) * C[rbdry] / dx
@@ -137,9 +149,9 @@ def wave_matrices(C, config):
 
     # Attenuation 
     timOrder = 2  # second-order backward differencees
-    timBak = torch.FloatTensor([3./2., -2., 1./2.]).to(device)
+    timBak = FloatTensor([3./2., -2., 1./2.])
 
-    A = torch.zeros([3]).to(device)
+    A = torch.zeros([3], device=device)
     A[0] = 1./timBak[0]
     A[1] = -timBak[1]
     A[2] = -timBak[2]
@@ -150,7 +162,7 @@ def wave_matrices(C, config):
     M[0,1:-1] = -1.
     M[1,1:-1] = +2.
     '''
-    M = torch.zeros([nx]).to(device)
+    M = torch.zeros([nx], device=device)
     M[1:-1] = 1.
     
     return M, A, Kx, Kxx
@@ -171,7 +183,7 @@ class Wave1D_PGNNcell(torch.nn.Module):
 
         # Injecting at source position (single source only)
         self.ptsrc = Point_Source( config['x_s'], config )
-        self.fscale = torch.FloatTensor( C**2 / config['dx'] ).to(device)
+        self.fscale = FloatTensor( C**2 / config['dx'] )
 
     def forward(self, H, src ):
 
@@ -236,7 +248,7 @@ class Wave1D_Propagator(torch.nn.Module):
         self.nrec = len(config['x_r'])
 
         # Define the source amplitudes
-        ts = torch.linspace(0, config['T'], config['nt']).to(device)
+        ts = torch.linspace(0, config['T'], config['nt'], device=device)
         self.ws = ricker(ts, config)
 
         # Receiver geometry
@@ -407,7 +419,7 @@ def linear_sources(dm, u0s, config):
 # Problem 3.2
 
 def linear_forward_operator(C0, dm, config):
-
+    raise DeprecationWarning('This part is deprecated due to some of the functions are out of date.')
     # Propagate with linearized source from model perturbation
     u0s, _ = forward_operator(C0, config)
     linsrc = linear_sources(dm, u0s, config)
@@ -430,7 +442,7 @@ def adjoint_condition(C0, config):
         dot( dm, Adjoint(Sampled(data)) )  [in model domain]
     where 'dm' and 'data' are random model and data values.
     '''
-
+    raise DeprecationWarning('This part is deprecated due to some of the functions are out of date.')
     # using random values
     nt = config['nt']
     nx = config['nx']
@@ -513,8 +525,8 @@ class Wave1D_AGfunc(object):
         # Load the model
         #C, C0 = basic_model(config, vBase=vBase) 
         C, C0 = basic_seismic_model(config) 
-        self.C = torch.from_numpy(C).float().to(device)
-        self.C0 = torch.from_numpy(C0).float().to(device)
+        self.C = torch.from_numpy(C).to(device, dtype=torch.float)
+        self.C0 = torch.from_numpy(C0).to(device, dtype=torch.float)
 
         # Receiver geometry
         config['rcv'] = Receivers(config)
@@ -585,7 +597,7 @@ class Wave1D_AGfunc(object):
 
             print("\nForward trial model step %d running..."%i )
             start = time.time()
-            C1 = C0.to(device)
+            C1 = C0
 
             #torch.autograd.set_detect_anomaly(False)
             propC1 = Wave1D_Propagator(C1,config)
