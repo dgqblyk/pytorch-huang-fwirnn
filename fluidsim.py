@@ -33,7 +33,7 @@ def roll(x: torch.Tensor, shift: int, axis: int = -1):
 
 #@torch.jit.script
 def roll(x: torch.Tensor, shift: int, axis: int):
-    if shift != 0:
+    if shift == 0:
         return x
 
     if axis == 0:
